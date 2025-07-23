@@ -1,6 +1,5 @@
 import os
 from datetime import datetime, timedelta
-from typing import Dict
 
 import pandas as pd
 import requests
@@ -157,53 +156,13 @@ def get_stock_prices(tickers: list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]) 
     return prices
 
 
-def summarize_expenses(df: pd.DataFrame) -> Dict:
-    expenses = df[df["Сумма операции"] < 0].copy()
-    total = round(expenses["Сумма операции"].sum() * -1)
-
-    top_categories = (
-        expenses.groupby("Категория")["Сумма операции"]
-        .sum()
-        .sort_values()
-        .head(7)
-        .abs()
-        .round()
-        .to_dict()
-    )
-
-    other_total = round(total - sum(top_categories.values()))
-    if other_total > 0:
-        top_categories["Остальное"] = other_total
-
-    cash_transfers = expenses[expenses["Категория"].isin(["Переводы", "Наличные"])]
-    transfers_summary = (
-        cash_transfers.groupby("Категория")["Сумма операции"]
-        .sum()
-        .abs()
-        .round()
-        .to_dict()
-    )
-
-    return {
-        "Общая сумма": total,
-        "Основные": top_categories,
-        "Переводы и наличные": transfers_summary,
-    }
+def summarize_expenses(df: pd.DataFrame) -> float:
+    total = df[df["Сумма операции"] < 0]["Сумма операции"].sum()
+    logger.debug(f"Сумма расходов (float): {total}")
+    return round_amount(total)
 
 
-def summarize_income(df: pd.DataFrame) -> Dict:
-    income = df[df["Сумма операции"] > 0].copy()
-    total = round(income["Сумма операции"].sum())
-
-    by_category = (
-        income.groupby("Категория")["Сумма операции"]
-        .sum()
-        .sort_values(ascending=False)
-        .round()
-        .to_dict()
-    )
-
-    return {
-        "Общая сумма": total,
-        "Основные": by_category,
-    }
+def summarize_income(df: pd.DataFrame) -> float:
+    total = df[df["Сумма операции"] > 0]["Сумма операции"].sum()
+    logger.debug(f"Сумма поступлений (float): {total}")
+    return round_amount(total)

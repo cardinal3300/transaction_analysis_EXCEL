@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+# from typing import Literal
 
 import pandas as pd
 
@@ -13,6 +14,66 @@ from src.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Period = Literal["W", "M", "Y", "ALL"]
+
+
+# def get_transactions_summary(
+#     date_str: str,
+#     period: Period = "M",
+# ) -> dict:
+#     """
+#     Формирует сводный отчёт по транзакциям за указанный период.
+#
+#     Аргументы:
+#         date_str (str): Базовая дата в формате "YYYY-MM-DD".
+#         period (str): Период анализа: W (неделя), M (месяц), Y (год), ALL (всё время).
+#
+#     Возвращает:
+#         dict: Словарь с данными об операциях, курсах валют и котировках акций.
+#     """
+#     logger.info(f"Формирование отчёта за период '{period}' к дате {date_str}")
+#
+#     try:
+#         current_date = datetime.strptime(date_str, "%Y-%m-%d")
+#     except ValueError:
+#         logger.error(f"Неверный формат даты: {date_str}")
+#         raise
+#
+#     df = load_transactions()
+#
+#     # Фильтрация по периоду
+#     if period != "ALL":
+#         if period == "W":
+#             delta = pd.DateOffset(weeks=1)
+#         elif period == "M":
+#             delta = pd.DateOffset(months=1)
+#         elif period == "Y":
+#             delta = pd.DateOffset(years=1)
+#         else:
+#             logger.warning(f"Неизвестный период: {period}")
+#             delta = pd.DateOffset(months=1)
+#
+#         start_date = current_date - delta
+#         df = df[(df["Дата операции"] >= start_date) & (df["Дата операции"] <= current_date)]
+#
+#     # Суммируем
+#     expenses = summarize_expenses(df)
+#     income = summarize_income(df)
+#
+#     # Получаем курсы валют и котировки акций
+#     currency_rates = get_currency_rate()
+#     stock_prices = get_stock_prices()
+#
+#     summary = {
+#         "Расходы": expenses,
+#         "Поступления": income,
+#         "Курс валют": currency_rates,
+#         "Акции": stock_prices,
+#     }
+#
+#     logger.info(f"Отчёт сформирован: {summary}")
+#     return summary
 
 
 def get_transactions_summary(date_str: str, period: str = "M", df: pd.DataFrame = None) -> dict:
@@ -41,11 +102,11 @@ def get_transactions_summary(date_str: str, period: str = "M", df: pd.DataFrame 
             logger.warning("Загружены пустые транзакции")
             return {"message": "Нет доступных транзакций"}
 
-        df_filtered = filter_transactions_by_period(df, target_date, period)
+        filter_transactions_by_period(df, target_date, period)
 
         summary = {
-            "Расходы": summarize_expenses(df_filtered),
-            "Поступления": summarize_income(df_filtered),
+            "Расходы": summarize_expenses(df),
+            "Поступления": summarize_income(df),
             "Курс валют": get_currency_rate(),
             "Акции": get_stock_prices()
         }

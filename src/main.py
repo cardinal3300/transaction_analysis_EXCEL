@@ -22,9 +22,9 @@ def main():
             logger.error("Неверный формат даты. Используйте YYYY-MM-DD.")
             return
 
-        logger.info(f"Формируется отчёт за период '{period_input}' к дате {date_input}")
+        logger.info(f"Формируется отчёт к дате {date_input}")
 
-        summary = get_transactions_summary(date_input, period_input)
+        summary = get_transactions_summary(date_input)
 
         print("\n📊 Отчёт по транзакциям:\n")
         print(json.dumps(summary, indent=4, ensure_ascii=False))
