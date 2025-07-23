@@ -1,119 +1,162 @@
 import pandas as pd
-from typing import Union
-from pathlib import Path
 import yfinance as yf
 import requests
 import os
 from dotenv import load_dotenv
+from src import setup_logger
+from datetime import datetime, timedelta
+import json
 
 load_dotenv()
 
-import logging
+api_key = os.getenv("CURRENCY_API_KEY")
+
+logger = setup_logger(__name__)
 
 
-def setup_logger(name: str) -> logging.Logger:
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        logger.setLevel(logging.DEBUG)
+def load_transactions(filepath: str = "data/operations.xlsx") -> pd.DataFrame:
+    """
+    Загружает транзакции из Excel-файла.
+    Параметры:
+        path (str): Путь к файлу с транзакциями.
+    Возвращает:
+        pd.DataFrame: Таблица с данными о транзакциях.
+    """
 
-        # Консольный обработчик
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
+    if not os.path.exists(filepath):
+        logger.error(f"Файл не найден: {filepath}")
+        return pd.DataFrame()
 
-        formatter = logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s")
-        ch.setFormatter(formatter)
-
-        logger.addHandler(ch)
-        logger.propagate = False
-
-    return logger
-
-
-def load_transactions(file_path: Union[str, Path]) -> pd.DataFrame:
-    """Загружает Excel-файл с транзакциями.
-    Args:
-        file_path (str | Path): путь к Excel-файлу.
-    Returns:
-        pd.DataFrame: таблица с транзакциями."""
-
-    df = pd.read_excel(file_path)
-    df["Дата операции"] = pd.to_datetime(df["Дата операции"], errors="coerce")
-    df["Дата платежа"] = pd.to_datetime(df["Дата платежа"], errors="coerce")
-    df = df.dropna(subset=["Дата операции"])  # Удалим записи без даты операции
-    return df
+    try:
+        df = pd.read_excel(filepath)
+        logger.info(f"Файл загружен: {filepath}, {len(df)} записей")
+        return df
+    except Exception as e:
+        logger.exception(f"Ошибка при загрузке Excel-файла: {e}")
+        return pd.DataFrame()
 
 
-def filter_by_date_range(df: pd.DataFrame, end_date: str, mode: str = "M") -> pd.DataFrame:
-    """Фильтрует транзакции по диапазону дат.
+def filter_by_date_range(df: pd.DataFrame, date: datetime, mode: str = "M") -> pd.DataFrame:
+    """
+    Фильтрует транзакции по диапазону дат.
     Args:
         df (pd.DataFrame): датафрейм с транзакциями.
-        end_date (str): конечная дата (в формате YYYY-MM-DD).
+        date (str): конечная дата (в формате YYYY-MM-DD).
         mode (str): диапазон ('W', 'M', 'Y', 'ALL').
     Returns:
-        pd.DataFrame: отфильтрованные транзакции."""
+        pd.DataFrame: отфильтрованные транзакции.
+    """
 
-    end = pd.to_datetime(end_date)
-    if mode == "ALL":
-        return df[df["Дата операции"] <= end]
-    elif mode == "W":
-        start = end - pd.to_timedelta(end.weekday(), unit="D")
+    logger.info(f"Фильтрация по периоду: {mode}, дата: {date.strftime('%Y-%m-%d')}")
+
+    df = df.copy()
+    df["Дата операции"] = pd.to_datetime(df["Дата операции"], errors="coerce")
+    df = df.dropna(subset=["Дата операции"])
+
+    if mode == "W":
+        start = date - timedelta(days=date.weekday())
+        end = start + timedelta(days=6)
     elif mode == "M":
-        start = end.replace(day=1)
+        start = date.replace(day=1)
+        end = date
     elif mode == "Y":
-        start = end.replace(month=1, day=1)
+        start = date.replace(month=1, day=1)
+        end = date
+    elif mode == "ALL":
+        end = date
+        start = df["Дата операции"].min()
     else:
-        raise ValueError("Неверный режим диапазона. Используйте W, M, Y или ALL.")
-    return df[(df["Дата операции"] >= start) & (df["Дата операции"] <= end)]
+        logger.warning(f"Неизвестный период: {mode}")
+        return pd.DataFrame()
+
+    mask = (df["Дата операции"] >= start) & (df["Дата операции"] <= end)
+    result_df = df.loc[mask]
+    logger.debug(f"Фильтрация: {len(result_df)} записей между {start} и {end}")
+    return result_df
 
 
 def round_amount(amount: float) -> int:
     """Округляет число до целого."""
-    return int(round(amount))
+
+    result = round(amount)
+    logger.debug(f"Округлено: {amount} → {result}")
+    return result
 
 
-def get_currency_rate(base: str = "RUB", symbols: list = ["USD", "EUR"]) -> dict:
-    """Получает актуальный курс валют с API exchangerate.host
-    Args:
-        base (str): базовая валюта (по умолчанию RUB)
-        symbols (list): список валют, которые нужны
-    Returns:
-        dict: словарь с курсами валют."""
+def get_currency_rate(currencies: list = ["USD", "EUR"], base: str = "RUB") -> dict:
+    """
+    Получает текущие курсы валют с помощью внешнего API.
+    Параметры:
+        currencies (list): Курсы валют (по умолчанию "USD", "EUR").
+        base: (str): Базовая валюта (по умолчанию "RUB")
+    Возвращает:
+        dict: Словарь с курсами валют или пустой словарь в случае ошибки.
+    """
 
-    api_key = os.getenv("CURRENCY_API_KEY")
-    params = {"base": base, "symbols": ", ".join(symbols)}
-    url = f"https://v6.exchangerate-api.com/v6/{api_key}/latest/USD"
+    logger.info(f"Получение курсов валют для: {currencies}, базовая валюта: {base}")
+
+    if not api_key:
+        logger.error("API-ключ для ExchangeRate API не найден в .env")
+        return {cur: None for cur in currencies}
 
     try:
-        response = requests.get(url, params=params)
+        url = f"https://v6.exchangerate-api.com/v6/{api_key}/latest/{base}"
+        response = requests.get(url)
+        response.raise_for_status()
         data = response.json()
-        return data.get("rate", {})
-    except Exception as e:
-        print(f"Ошибка при получении курса валют: {e}")
-        return {s: None for s in symbols}
+
+        if data["result"] != "success":
+            logger.error(f"API вернул ошибку: {data}")
+            return {cur: None for cur in currencies}
+
+        rates = data["conversion_rates"]
+        result = {cur: round(rates.get(cur, 0.0), 2) for cur in currencies}
+
+        for cur, rate in result.items():
+            logger.debug(f"{base} → {cur} = {rate}")
+
+        logger.info("Курсы валют успешно получены через API")
+        return result
+
+    except requests.RequestException as e:
+        logger.exception(f"Ошибка при подключении к ExchangeRate API: {e}")
+        return {cur: None for cur in currencies}
 
 
-def get_stock_prices(tickers: list = ["AAPL", "MSFT", "GOOGL", "AMZN"]) -> dict:
-    """Получает текущие цены акций с помощью Yahoo Finance через yfinance.
-    Args:
-        tickers (list): тикеры компаний
-    Returns:
-        dict: {тикер: цена}."""
+def get_stock_prices(tickers: list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]) -> dict:
+    """
+    Получает текущие цены акций по тикерам с Yahoo Finance.
+
+    Параметры:
+        tickers (list): Список тикеров компаний.
+
+    Возвращает:
+        dict: Словарь вида {тикер: цена}, либо None при ошибке.
+    """
 
     prices = {}
     try:
-        stocks = yf.download(tickers=tickers, period="1d", interval="1m", progress=False, threads=True)
+        logger.info(f"Запрос цен акций для: {tickers}")
+        stocks = yf.download(
+            tickers=tickers,
+            period="1d",
+            interval="1m",
+            progress=False,
+            threads=True,
+            auto_adjust=False
+        )
         for ticker in tickers:
             try:
                 last_price = stocks['Close'][ticker].dropna().iloc[-1]
                 prices[ticker] = round(last_price, 2)
-            except Exception:
+                logger.debug(f"{ticker}: {prices[ticker]}")
+            except Exception as e:
+                logger.warning(f"Не удалось получить цену для {ticker}: {e}")
                 prices[ticker] = None
+        logger.info("Цены акций успешно получены")
     except Exception as e:
-        print(f"Ошибка при получении котировок: {e}")
+        logger.exception(f"Ошибка при получении котировок: {e}")
         prices = {t: None for t in tickers}
-
     return prices
-
-
-# print(get_currency_rate())  # {'USD': 0.0111, 'EUR': 0.0102}
-print(get_stock_prices())   # {'AAPL': 187.32, 'MSFT': 412.45, ...}
+print(get_currency_rate("USD", "RUB"))
+print(get_stock_prices())

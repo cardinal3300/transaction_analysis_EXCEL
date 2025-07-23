@@ -1,20 +1,21 @@
 from typing import List, Dict, Any
 from src.utils import setup_logger
+from datetime import datetime
+from src import setup_logger
 
 logger = setup_logger(__name__)
 
 
 def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int) -> float:
-    """Возвращает сумму, которую можно было бы отложить в инвесткопилку
-    за указанный месяц, округляя каждую трату до заданного лимита.
-    Args:
-        month (str): месяц в формате 'YYYY-MM'.
-        transactions (List[Dict[str, Any]]): список транзакций.
-        limit (int): округление вверх до ближайшего кратного (например, 10, 100).
-    Returns:
-        float: сумма, которую можно отложить."""
-
-    from datetime import datetime
+    """
+    Рассчитывает сумму, которую можно было бы отложить в инвесткопилку за указанный месяц.
+    Параметры:
+        month (str): Месяц в формате 'YYYY-MM'.
+        transactions (List[Dict[str, Any]]): Список транзакций.
+        limit (int): Предел округления (например, 100).
+    Возвращает:
+        float: Сумма накоплений за месяц.
+    """
 
     year, mon = map(int, month.split("-"))
     total_round_sum = 0.0

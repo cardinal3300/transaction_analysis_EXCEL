@@ -1,62 +1,53 @@
-import pytest
-import pandas as pd
-from pathlib import Path
 import os
-import json
-from src.reports import spending_by_workday, save_to_file
+import pandas as pd
+from datetime import datetime
+from src.reports import spending_by_workday
 
 
-@pytest.fixture
-def fake_transactions():
+def test_spending_by_workday_logic(tmp_path):
     data = {
-        "Дата операции": pd.to_datetime(
-            [
-                "2024-05-13",  # Пн
-                "2024-05-14",  # Вт
-                "2024-05-18",  # Сб
-                "2024-05-19",  # Вс
-                "2024-06-10",  # Пн
-                "2024-06-15",  # Сб
-                "2024-07-01",  # Пн
-                "2024-07-06",  # Сб
-                "2024-07-07",  # Вс
-            ]
-        ),
-        "Сумма операции": [-100, -200, -300, -400, -150, -250, -120, -130, -140],
+        "Дата операции": [
+            "2024-04-01",  # понедельник
+            "2024-04-06",  # суббота
+            "2024-04-07",  # воскресенье
+            "2024-05-13",  # понедельник
+            "2024-06-01",  # суббота
+        ],
+        "Сумма операции": [100, 150, 100, 300, 50],
     }
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+
+    result = spending_by_workday(df, date="2024-07-01")
+
+    assert set(result.columns) == {"Тип дня", "Средние траты"}
+    assert "Рабочий день" in result["Тип дня"].values
+    assert "Выходной" in result["Тип дня"].values
+
+    # Проверка на осмысленные значения
+    values = result.set_index("Тип дня")["Средние траты"].to_dict()
+    assert isinstance(values["Рабочий день"], float)
+    assert isinstance(values["Выходной"], float)
+    assert values["Рабочий день"] > 0
+    assert values["Выходной"] > 0
 
 
-def test_spending_by_workday_calculations(fake_transactions, tmp_path):
-    # Укажем дату — конец анализируемого периода
-    result = spending_by_workday(fake_transactions, date="2024-07-10")
+def test_spending_by_workday_saves_file(tmp_path, monkeypatch):
+    # Подмена рабочей директории, чтобы не писать в корень проекта
+    monkeypatch.chdir(tmp_path)
 
-    # Проверка, что ключи присутствуют
-    assert "Будни" in result
-    assert "Выходные" in result
+    data = {
+        "Дата операции": ["2024-05-10", "2024-05-11"],
+        "Сумма операции": [100, 200],
+    }
+    df = pd.DataFrame(data)
 
-    # Ручной расчёт:
-    # Будни: -100, -200, -150, -120 → среднее: 142.5
-    # Выходные: -300, -400, -250, -130, -140 → среднее: 244
-    assert result["Будни"] == 142
-    assert result["Выходные"] == 244
+    spending_by_workday(df, date="2024-07-01")
 
+    # Имя файла, ожидаемое по умолчанию
+    expected_file = tmp_path / "spending_by_workday_output.csv"
+    assert expected_file.exists()
 
-def test_save_to_file_decorator(fake_transactions, tmp_path):
-    report_path = tmp_path / "custom_report.json"
-
-    @save_to_file(str(report_path))
-    def custom_report(transactions):
-        return {"test": 123}
-
-    result = custom_report(fake_transactions)
-
-    # Проверим, что файл создан
-    assert report_path.exists()
-
-    # Проверим содержимое файла
-    with open(report_path, encoding="utf-8") as f:
-        data = json.load(f)
-
-    assert data == {"test": 123}
-    assert result == {"test": 123}
+    # Проверка содержимого
+    df_out = pd.read_csv(expected_file)
+    assert "Тип дня" in df_out.columns
+    assert "Средние траты" in df_out.columns

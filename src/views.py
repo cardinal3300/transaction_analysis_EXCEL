@@ -1,61 +1,101 @@
-from typing import Optional, Literal
+import logging
 import pandas as pd
+from datetime import datetime
+from typing import Optional
 from src.utils import (
-    load_transactions,
-    filter_by_date_range,
-    round_amount,
-    get_currency_rate,
-    get_stock_prices,
-    setup_logger,
+    load_transactions, filter_by_date_range,
+    get_currency_rate, get_stock_prices, round_amount
 )
 
-logger = setup_logger(__name__)
-
-Range = Literal["W", "M", "Y", "ALL"]
+logger = logging.getLogger(__name__)
 
 
-def analyze_transactions(date: str, range_mode: Optional[Range] = "M") -> dict:
+def get_transactions_summary(date_str: str, period: Optional[str] = "M") -> dict:
+    """
+    Формирует сводку по транзакциям за указанный период до заданной даты.
+        Параметры:
+            date_str (str): Дата в формате 'YYYY-MM-DD', на которую строится анализ.
+            period (str): Диапазон анализа:
+                - "W" — неделя;
+                - "M" — месяц (по умолчанию);
+                - "Y" — год;
+                - "ALL" — все транзакции до даты.
+        Возвращает:
+            dict: JSON-словарь с данными:
+                - "Расходы":
+                    - "Общая сумма"
+                    - "Основные" (7 крупнейших категорий + "Остальное")
+                    - "Переводы и наличные"
+                - "Поступления":
+                    - "Общая сумма"
+                    - "Основные" (по категориям)
+                - "Курс валют"
+                - "Стоимость акций"
+        """
 
-    df = load_transactions("data/operations.xlsx")
-    filtered = filter_by_date_range(df, date, range_mode)
+    logger.info(f"Анализ транзакций: дата={date_str}, период={period}")
 
-    # Расходы (только отрицательные суммы)
-    expenses = filtered[filtered["Сумма операции"] < 0]
-    total_expenses = round_amount(abs(expenses["Сумма операции"].sum()))
+    try:
+        date = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError as e:
+        logger.error(f"Неверный формат даты: {e}")
+        raise
 
-    # Поступления (положительные суммы)
-    income = filtered[filtered["Сумма операции"] > 0]
-    total_income = round_amount(income["Сумма операции"].sum())
+    df = load_transactions()
+    logger.debug(f"Загружено транзакций: {len(df)}")
 
-    # --- Топ-7 категорий расходов ---
-    expense_by_category = expenses.groupby("Категория")["Сумма операции"].sum().abs().sort_values(ascending=False)
+    df_filtered = filter_by_date_range(df, date, period)
+    logger.info(f"Транзакции за выбранный период: {len(df_filtered)}")
 
-    top_expense = expense_by_category.head(7).to_dict()
-    if len(expense_by_category) > 7:
-        other_sum = expense_by_category.iloc[7:].sum()
-        top_expense["Остальное"] = round_amount(other_sum)
+    if df_filtered.empty:
+        logger.warning("Нет транзакций за указанный период.")
+        return {}
 
-    top_expense = {k: round_amount(v) for k, v in top_expense.items()}
+    # Разделение по типу
+    expenses = df_filtered[df_filtered["Сумма операции"] < 0].copy()
+    incomes = df_filtered[df_filtered["Сумма операции"] > 0].copy()
+    expenses["Сумма операции"] = expenses["Сумма операции"].abs()
 
-    # --- Переводы и наличные ---
+    # Топ-7 расходов
+    top_expenses = (
+        expenses.groupby("Категория")["Сумма операции"]
+        .sum().sort_values(ascending=False)
+    )
+    top7 = top_expenses[:7].to_dict()
+    other_sum = top_expenses[7:].sum()
+    if other_sum > 0:
+        top7["Остальное"] = round_amount(other_sum)
+
+    # Переводы и наличные
     transfers = expenses[expenses["Категория"].isin(["Переводы", "Наличные"])]
-    transfer_sum = (
+    transfers_sum = (
         transfers.groupby("Категория")["Сумма операции"]
-        .sum()
-        .abs()
-        .sort_values(ascending=False)
-        .apply(round_amount)
-        .to_dict()
+        .sum().sort_values(ascending=False).to_dict()
     )
 
-    # --- Доходы по категориям ---
+    # Доходы по категориям
     income_by_category = (
-        income.groupby("Категория")["Сумма операции"].sum().sort_values(ascending=False).apply(round_amount).to_dict()
+        incomes.groupby("Категория")["Сумма операции"]
+        .sum().sort_values(ascending=False).to_dict()
     )
 
-    return {
-        "Расходы": {"Общая сумма": total_expenses, "Основные": top_expense, "Переводы и наличные": transfer_sum},
-        "Поступления": {"Общая сумма": total_income, "Основные": income_by_category},
-        "Курс валют": get_currency_rate(),
-        "Стоимость акций": get_stock_prices(),
+    # Жёстко заданные валюты и акции
+    currency_rates = get_currency_rate(base="RUB", targets=["USD", "EUR"])
+    stock_prices = get_stock_prices(tickers=["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"])
+
+    result = {
+        "Расходы": {
+            "Общая сумма": round_amount(expenses["Сумма операции"].sum()),
+            "Основные": {k: round_amount(v) for k, v in top7.items()},
+            "Переводы и наличные": {k: round_amount(v) for k, v in transfers_sum.items()},
+        },
+        "Поступления": {
+            "Общая сумма": round_amount(incomes["Сумма операции"].sum()),
+            "Основные": {k: round_amount(v) for k, v in income_by_category.items()},
+        },
+        "Курс валют": currency_rates,
+        "Акции": stock_prices,
     }
+
+    logger.debug("Результат сформирован.")
+    return result
