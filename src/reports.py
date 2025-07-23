@@ -1,8 +1,9 @@
-import pandas as pd
-from functools import wraps
-from typing import Optional, Callable
 from datetime import datetime, timedelta
-import os
+from functools import wraps
+from typing import Callable, Optional
+
+import pandas as pd
+
 from src import setup_logger
 
 logger = setup_logger(__name__)
@@ -28,7 +29,9 @@ def save_to_file(filename: Optional[str] = None):
             except Exception as e:
                 logger.exception(f"Ошибка при сохранении отчёта в файл: {e}")
             return result
+
         return wrapper
+
     return decorator
 
 
@@ -60,8 +63,7 @@ def spending_by_workday(transactions: pd.DataFrame, date: Optional[str] = None) 
         df_filtered = df_filtered.dropna(subset=["Дата операции", "Сумма операции"])
 
         df_filtered = df_filtered[
-            (df_filtered["Дата операции"] >= start_date) &
-            (df_filtered["Дата операции"] <= current_date)
+            (df_filtered["Дата операции"] >= start_date) & (df_filtered["Дата операции"] <= current_date)
         ]
 
         logger.info(f"Транзакции в диапазоне: {len(df_filtered)}")

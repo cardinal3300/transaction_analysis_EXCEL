@@ -1,6 +1,6 @@
-from typing import List, Dict, Any
-from src.utils import setup_logger
 from datetime import datetime
+from typing import Any, Dict, List
+
 from src import setup_logger
 
 logger = setup_logger(__name__)

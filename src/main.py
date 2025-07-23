@@ -1,50 +1,36 @@
-from src.utils import load_transactions
-from src.views import analyze_transactions
-from src.services import investment_bank
-from src.reports import spending_by_workday
-import pandas as pd
 import json
+from datetime import datetime
+
+from src.utils import setup_logger
+from src.views import get_transactions_summary
+
+logger = setup_logger(__name__)
 
 
 def main():
-    print("🧮 Добро пожаловать в Финансовый Анализатор!\n")
-    print("Выберите режим работы:")
-    print("1 — Анализ расходов и поступлений")
-    print("2 — Расчёт инвесткопилки")
-    print("3 — Отчёт по тратам в будни/выходные\n")
+    logger.info("Запуск аналитического приложения по транзакциям.")
 
-    choice = input("Введите номер опции: ").strip()
-    transactions = load_transactions("../data/operations.xlsx")
+    try:
+        # Пример входных данных:
+        date_input = input("Введите дату (в формате YYYY-MM-DD): ").strip()
+        period_input = input("Введите период (W/M/Y/ALL) [по умолчанию M]: ").strip().upper() or "M"
 
-    if choice == "1":
-        date = input("Введите дату (YYYY-MM-DD): ").strip()
-        range_mode = input("Введите диапазон (W/M/Y/ALL, по умолчанию M): ").strip().upper() or "M"
-        result = analyze_transactions(date, range_mode)
-        print_json(result)
+        # Валидация даты
+        try:
+            datetime.strptime(date_input, "%Y-%m-%d")
+        except ValueError:
+            logger.error("Неверный формат даты. Используйте YYYY-MM-DD.")
+            return
 
-    elif choice == "2":
-        month = input("Введите месяц (YYYY-MM): ").strip()
-        limit = input("Введите лимит округления (например, 100): ").strip()
-        limit = int(limit) if limit.isdigit() else 100
-        tx_list = transactions.to_dict(orient="records")
-        result = investment_bank(month, tx_list, limit)
-        print(f"\n📥 Можно отложить в инвесткопилку: {result:.2f} руб.\n")
+        logger.info(f"Формируется отчёт за период '{period_input}' к дате {date_input}")
 
-    elif choice == "3":
-        date = input("Введите дату (по умолчанию сегодня): ").strip() or None
-        result = spending_by_workday(transactions, date)
-        print("\n📊 Средние расходы за последние 3 месяца:")
-        print(f"Будни:     {result['Будни']} руб.")
-        print(f"Выходные:  {result['Выходные']} руб.\n")
+        summary = get_transactions_summary(date_input, period_input)
 
-    else:
-        print("❌ Неизвестная команда. Попробуйте снова.")
+        print("\n📊 Отчёт по транзакциям:\n")
+        print(json.dumps(summary, indent=4, ensure_ascii=False))
 
-
-def print_json(data: dict):
-    print("\n📋 Результат анализа:\n")
-    print(json.dumps(data, ensure_ascii=False, indent=2))
-    print()
+    except Exception as e:
+        logger.exception(f"Произошла ошибка в приложении: {e}")
 
 
 if __name__ == "__main__":

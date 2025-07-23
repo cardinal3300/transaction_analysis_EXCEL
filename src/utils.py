@@ -1,11 +1,13 @@
-import pandas as pd
-import yfinance as yf
-import requests
 import os
-from dotenv import load_dotenv
-from src import setup_logger
 from datetime import datetime, timedelta
-import json
+from typing import Dict
+
+import pandas as pd
+import requests
+import yfinance as yf
+from dotenv import load_dotenv
+
+from src import setup_logger
 
 load_dotenv()
 
@@ -14,7 +16,7 @@ api_key = os.getenv("CURRENCY_API_KEY")
 logger = setup_logger(__name__)
 
 
-def load_transactions(filepath: str = "data/operations.xlsx") -> pd.DataFrame:
+def load_transactions(filepath: str = "../data/operations.xlsx") -> pd.DataFrame:
     """
     Загружает транзакции из Excel-файла.
     Параметры:
@@ -36,7 +38,7 @@ def load_transactions(filepath: str = "data/operations.xlsx") -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def filter_by_date_range(df: pd.DataFrame, date: datetime, mode: str = "M") -> pd.DataFrame:
+def filter_transactions_by_period(df: pd.DataFrame, date: datetime, mode: str = "M") -> pd.DataFrame:
     """
     Фильтрует транзакции по диапазону дат.
     Args:
@@ -50,7 +52,7 @@ def filter_by_date_range(df: pd.DataFrame, date: datetime, mode: str = "M") -> p
     logger.info(f"Фильтрация по периоду: {mode}, дата: {date.strftime('%Y-%m-%d')}")
 
     df = df.copy()
-    df["Дата операции"] = pd.to_datetime(df["Дата операции"], errors="coerce")
+    df["Дата операции"] = pd.to_datetime(df["Дата операции"], errors="coerce", dayfirst=True)
     df = df.dropna(subset=["Дата операции"])
 
     if mode == "W":
@@ -83,7 +85,7 @@ def round_amount(amount: float) -> int:
     return result
 
 
-def get_currency_rate(currencies: list = ["USD", "EUR"], base: str = "RUB") -> dict:
+def get_currency_rate(currencies: list = ["RUB", "EUR"], base: str = "USD") -> dict:
     """
     Получает текущие курсы валют с помощью внешнего API.
     Параметры:
@@ -138,16 +140,11 @@ def get_stock_prices(tickers: list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]) 
     try:
         logger.info(f"Запрос цен акций для: {tickers}")
         stocks = yf.download(
-            tickers=tickers,
-            period="1d",
-            interval="1m",
-            progress=False,
-            threads=True,
-            auto_adjust=False
+            tickers=tickers, period="1d", interval="1m", progress=False, threads=True, auto_adjust=False
         )
         for ticker in tickers:
             try:
-                last_price = stocks['Close'][ticker].dropna().iloc[-1]
+                last_price = stocks["Close"][ticker].dropna().iloc[-1]
                 prices[ticker] = round(last_price, 2)
                 logger.debug(f"{ticker}: {prices[ticker]}")
             except Exception as e:
@@ -158,5 +155,55 @@ def get_stock_prices(tickers: list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]) 
         logger.exception(f"Ошибка при получении котировок: {e}")
         prices = {t: None for t in tickers}
     return prices
-print(get_currency_rate("USD", "RUB"))
-print(get_stock_prices())
+
+
+def summarize_expenses(df: pd.DataFrame) -> Dict:
+    expenses = df[df["Сумма операции"] < 0].copy()
+    total = round(expenses["Сумма операции"].sum() * -1)
+
+    top_categories = (
+        expenses.groupby("Категория")["Сумма операции"]
+        .sum()
+        .sort_values()
+        .head(7)
+        .abs()
+        .round()
+        .to_dict()
+    )
+
+    other_total = round(total - sum(top_categories.values()))
+    if other_total > 0:
+        top_categories["Остальное"] = other_total
+
+    cash_transfers = expenses[expenses["Категория"].isin(["Переводы", "Наличные"])]
+    transfers_summary = (
+        cash_transfers.groupby("Категория")["Сумма операции"]
+        .sum()
+        .abs()
+        .round()
+        .to_dict()
+    )
+
+    return {
+        "Общая сумма": total,
+        "Основные": top_categories,
+        "Переводы и наличные": transfers_summary,
+    }
+
+
+def summarize_income(df: pd.DataFrame) -> Dict:
+    income = df[df["Сумма операции"] > 0].copy()
+    total = round(income["Сумма операции"].sum())
+
+    by_category = (
+        income.groupby("Категория")["Сумма операции"]
+        .sum()
+        .sort_values(ascending=False)
+        .round()
+        .to_dict()
+    )
+
+    return {
+        "Общая сумма": total,
+        "Основные": by_category,
+    }
