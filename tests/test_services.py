@@ -1,23 +1,27 @@
 import pytest
-
 from src.services import investment_bank
 
 
-@pytest.fixture
-def transactions_sample():
-    return [
-        {"Дата операции": "2024-05-03", "Сумма операции": 255.8},
-        {"Дата операции": "2024-05-12", "Сумма операции": 78.1},
-        {"Дата операции": "2024-05-29", "Сумма операции": 100.0},
-        {"Дата операции": "2024-06-01", "Сумма операции": 55.5},  # другая дата, не попадёт
+def test_investment_bank_basic():
+    transactions = [
+        {"Дата операции": "2023-05-10", "Сумма операции": -157.5},
+        {"Дата операции": "2023-05-15", "Сумма операции": -290.0},
+        {"Дата операции": "2023-05-20", "Сумма операции": 500.0},  # не учитывается
+        {"Дата операции": "2023-06-01", "Сумма операции": -120.0},  # другой месяц
     ]
+    result = investment_bank("2023-05", transactions, limit=100)
+    assert result == 52.5
 
 
 def test_investment_bank_empty():
-    result = investment_bank("2023-12", [], limit=100)
-    assert result == 0.0
+    assert investment_bank("2023-05", [], limit=100) == 0.0
 
 
-def test_investment_bank_no_matching_dates(transactions_sample):
-    result = investment_bank("2023-01", transactions_sample, limit=100)
-    assert result == 0.0
+def test_investment_bank_invalid_date():
+    transactions = [{"Дата операции": "invalid-date", "Сумма операции": -50}]
+    assert investment_bank("2023-05", transactions, 100) == 0.0
+
+
+def test_investment_bank_invalid_month_format():
+    with pytest.raises(ValueError):
+        investment_bank("2023/05", [], limit=100)

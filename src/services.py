@@ -17,21 +17,34 @@ def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int) 
         float: Сумма накоплений за месяц.
     """
 
-    year, mon = map(int, month.split("-"))
+    logger.info(f"Расчёт инвесткопилки за месяц: {month}")
     total_round_sum = 0.0
+
+    try:
+        year, mon = map(int, month.split("-"))
+    except ValueError:
+        logger.error(f"Неверный формат месяца: {month}")
+        raise ValueError(f"Неверный формат месяца: '{month}'. Ожидался 'YYYY-MM'.")
 
     for tx in transactions:
         try:
-            tx_date = datetime.strptime(tx["Дата операции"], "%Y-%m-%d")
-        except Exception:
+            tx_date = datetime.strptime(tx["Дата операции"], "%Y.%m.%d.")
+        except Exception as e:
+            logger.warning(f"Пропущена транзакция из-за ошибки парсинга: {tx} — {e}")
             continue  # пропускаем некорректные даты
+
         if tx_date.year != year or tx_date.month != mon:
             continue  # не тот месяц
-        amount = tx.get("Сумма операции", 0)
-        if amount > 0:
-            continue  # нас интересуют только расходы (отрицательные значения)
-        # Вычисление округления вверх до limit
+
+        amount = float(tx.get("Сумма операции", 0))
+        if not isinstance(amount, (int, float)) or amount >= 0:
+            continue  # только отрицательные суммы — это расходы
+
+         # Вычисление округления вверх до limit
         remainder = abs(amount) % limit
-        invest_part = (limit - remainder) if remainder != 0 else 0
+        invest_part = (limit - remainder) if remainder > 0 else 0
         total_round_sum += invest_part
-    return round(total_round_sum, 2)
+
+    result = round(total_round_sum, 2)
+    logger.info(f"Итого можно было бы отложить: {result} руб.")
+    return result

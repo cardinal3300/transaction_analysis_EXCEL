@@ -56,22 +56,32 @@ def spending_by_workday(transactions: pd.DataFrame, date: Optional[str] = None) 
             current_date = datetime.today()
 
         logger.info(f"Дата анализа: {current_date.date()}")
-
         start_date = current_date - timedelta(days=90)
+
         df_filtered = transactions.copy()
-        df_filtered["Дата операции"] = pd.to_datetime(df_filtered["Дата операции"], errors="coerce")
+
+        # Преобразуем даты: Excel-формат 'дд.мм.гггг чч:мм:сс', указываем dayfirst=True
+        df_filtered["Дата операции"] = pd.to_datetime(
+            df_filtered["Дата операции"],
+            errors="coerce",
+            dayfirst=True)
+
+        # Убираем строки с пропущенными датами и суммами
         df_filtered = df_filtered.dropna(subset=["Дата операции", "Сумма операции"])
 
+        # Фильтруем по периоду
         df_filtered = df_filtered[
             (df_filtered["Дата операции"] >= start_date) & (df_filtered["Дата операции"] <= current_date)
         ]
 
         logger.info(f"Транзакции в диапазоне: {len(df_filtered)}")
 
+        # Определяем тип дня
         df_filtered["Тип дня"] = df_filtered["Дата операции"].dt.dayofweek.apply(
             lambda x: "Выходной" if x >= 5 else "Рабочий день"
         )
 
+        # Группируем и считаем средние расходы
         grouped = df_filtered.groupby("Тип дня")["Сумма операции"].mean().reset_index()
         grouped.rename(columns={"Сумма операции": "Средние траты"}, inplace=True)
         grouped["Средние траты"] = grouped["Средние траты"].round(2)
