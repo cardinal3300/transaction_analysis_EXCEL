@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 
@@ -12,11 +13,10 @@ from src.utils import (
     summarize_income,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
-def get_transactions_summary(date_str: str, period: str = "M", df: pd.DataFrame = None) -> dict:
+def get_transactions_summary(date_str: str, period: str = "M", df: Optional[pd.DataFrame] = None) -> dict:
     """
     Возвращает сводную информацию по транзакциям за указанный период.
     Параметры:
@@ -24,7 +24,7 @@ def get_transactions_summary(date_str: str, period: str = "M", df: pd.DataFrame 
         period (str): один из вариантов: 'W', 'M', 'Y', 'ALL'
     Возвращает:
         dict: словарь с данными по расходам, доходам, курсам валют и акциям.
-        """
+    """
 
     logger.info(f"Сбор сводной информации по дате: {date_str} и периоду: {period}")
 

@@ -1,33 +1,33 @@
+from datetime import datetime, timedelta
+
 import pandas as pd
 
 from src.reports import spending_by_workday
 
 
-def test_spending_by_workday_logic(tmp_path):
+def test_spending_by_workday_logic():
+    analysis_date = datetime.strptime("2024-07-01", "%Y-%m-%d")
+
     data = {
         "Дата операции": [
-            "2024-04-01",  # понедельник
-            "2024-04-06",  # суббота
-            "2024-04-07",  # воскресенье
-            "2024-05-13",  # понедельник
-            "2024-06-01",  # суббота
+            (analysis_date - timedelta(days=5)).strftime("%Y-%m-%d"),  # среда (рабочий)
+            (analysis_date - timedelta(days=6)).strftime("%Y-%m-%d"),  # вторник (рабочий)
+            (analysis_date - timedelta(days=7)).strftime("%Y-%m-%d"),  # понедельник (рабочий)
+            (analysis_date - timedelta(days=8)).strftime("%Y-%m-%d"),  # воскресенье (выходной)
         ],
-        "Сумма операции": [100, 150, 100, 300, 50],
+        "Сумма операции": [100, 200, 150, 250],
     }
-    df = pd.DataFrame(data)
 
+    df = pd.DataFrame(data)
     result = spending_by_workday(df, date="2024-07-01")
 
     assert set(result.columns) == {"Тип дня", "Средние траты"}
     assert "Рабочий день" in result["Тип дня"].values
     assert "Выходной" in result["Тип дня"].values
 
-    # Проверка на осмысленные значения
-    values = result.set_index("Тип дня")["Средние траты"].to_dict()
-    assert isinstance(values["Рабочий день"], float)
-    assert isinstance(values["Выходной"], float)
-    assert values["Рабочий день"] > 0
-    assert values["Выходной"] > 0
+    result_dict = dict(zip(result["Тип дня"], result["Средние траты"]))
+    assert result_dict["Рабочий день"] == round((100 + 200 + 150) / 3, 2)  # 150.0
+    assert result_dict["Выходной"] == 250.0
 
 
 def test_spending_by_workday_saves_file(tmp_path, monkeypatch):

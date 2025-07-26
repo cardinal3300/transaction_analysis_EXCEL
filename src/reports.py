@@ -9,7 +9,7 @@ from src import setup_logger
 logger = setup_logger(__name__)
 
 
-def save_to_file(filename: Optional[str] = None):
+def save_to_file(filename: Optional[str] = None) -> Callable:
     """
     Декоратор для сохранения результата функции в файл.
     Параметры:
@@ -18,9 +18,9 @@ def save_to_file(filename: Optional[str] = None):
         Callable: Обёрнутая функция с сохранением вывода.
     """
 
-    def decorator(func: Callable):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args, **kwargs) -> pd.DataFrame:
             result = func(*args, **kwargs)
             try:
                 output_file = filename or f"{func.__name__}_output.csv"
@@ -48,7 +48,6 @@ def spending_by_workday(transactions: pd.DataFrame, date: Optional[str] = None) 
 
     try:
         logger.info("Вызов функции spending_by_workday")
-        logger.debug(f"Размер входного датафрейма: {transactions.shape}")
 
         if date:
             current_date = datetime.strptime(date, "%Y-%m-%d")
@@ -60,11 +59,8 @@ def spending_by_workday(transactions: pd.DataFrame, date: Optional[str] = None) 
 
         df_filtered = transactions.copy()
 
-        # Преобразуем даты: Excel-формат 'дд.мм.гггг чч:мм:сс', указываем dayfirst=True
-        df_filtered["Дата операции"] = pd.to_datetime(
-            df_filtered["Дата операции"],
-            errors="coerce",
-            dayfirst=True)
+        # Преобразуем даты: Excel-формат 'дд.мм.гггг чч:мм:сс'
+        df_filtered["Дата операции"] = pd.to_datetime(df_filtered["Дата операции"], errors="coerce", dayfirst=True)
 
         # Убираем строки с пропущенными датами и суммами
         df_filtered = df_filtered.dropna(subset=["Дата операции", "Сумма операции"])
@@ -77,7 +73,7 @@ def spending_by_workday(transactions: pd.DataFrame, date: Optional[str] = None) 
         logger.info(f"Транзакции в диапазоне: {len(df_filtered)}")
 
         # Определяем тип дня
-        df_filtered["Тип дня"] = df_filtered["Дата операции"].dt.dayofweek.apply(
+        df_filtered["Тип дня"] = df_filtered["Дата операции"].dt.weekday.apply(
             lambda x: "Выходной" if x >= 5 else "Рабочий день"
         )
 

@@ -22,7 +22,7 @@ def load_transactions(filepath: str = "../data/operations.xlsx") -> pd.DataFrame
         path (str): Путь к файлу с транзакциями.
     Возвращает:
         pd.DataFrame: Таблица с данными о транзакциях.
-        """
+    """
 
     if not os.path.exists(filepath):
         logger.error(f"Файл не найден: {filepath}")
@@ -46,7 +46,7 @@ def filter_transactions_by_period(df: pd.DataFrame, date: datetime, mode: str = 
         mode (str): диапазон ('W', 'M', 'Y', 'ALL').
     Returns:
         pd.DataFrame: отфильтрованные транзакции.
-        """
+    """
 
     logger.info(f"Фильтрация по периоду: {mode}, дата: {date.strftime('%Y-%m-%d')}")
 
@@ -92,7 +92,7 @@ def get_currency_rate(currencies: list = ["RUB", "EUR"], base: str = "USD") -> d
         base: (str): Базовая валюта (по умолчанию "RUB")
     Возвращает:
         dict: Словарь с курсами валют или пустой словарь в случае ошибки.
-        """
+    """
 
     logger.info(f"Получение курсов валют для: {currencies}, базовая валюта: {base}")
 
@@ -131,7 +131,7 @@ def get_stock_prices(tickers: list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]) 
         tickers (list): Список тикеров компаний.
     Возвращает:
         dict: Словарь вида {тикер: цена}, либо None при ошибке.
-        """
+    """
 
     prices = {}
     try:
@@ -156,12 +156,12 @@ def get_stock_prices(tickers: list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]) 
 
 def summarize_expenses(df: pd.DataFrame) -> float:
     """
-        Возвращает сумму всех расходов (отрицательных значений) из переданного DataFrame.
-        Параметры:
-            df (pd.DataFrame): Таблица транзакций с колонкой "Сумма операции".
-        Возвращает:
-            float: Общая сумма расходов.
-            """
+    Возвращает сумму всех расходов (отрицательных значений) из переданного DataFrame.
+    Параметры:
+        df (pd.DataFrame): Таблица транзакций с колонкой "Сумма операции".
+    Возвращает:
+        float: Общая сумма расходов.
+    """
 
     total = df[df["Сумма операции"] < 0]["Сумма операции"].sum()
     logger.debug(f"Сумма расходов (float): {total}")
@@ -170,12 +170,12 @@ def summarize_expenses(df: pd.DataFrame) -> float:
 
 def summarize_income(df: pd.DataFrame) -> float:
     """
-        Возвращает сумму всех поступлений (положительных значений) из переданного DataFrame.
-        Параметры:
-            df (pd.DataFrame): Таблица транзакций с колонкой "Сумма операции".
-        Возвращает:
-            float: Общая сумма поступлений.
-            """
+    Возвращает сумму всех поступлений (положительных значений) из переданного DataFrame.
+    Параметры:
+        df (pd.DataFrame): Таблица транзакций с колонкой "Сумма операции".
+    Возвращает:
+        float: Общая сумма поступлений.
+    """
 
     total = df[df["Сумма операции"] > 0]["Сумма операции"].sum()
     logger.debug(f"Сумма поступлений (float): {total}")
